@@ -1,3 +1,4 @@
+
 import importlib.util
 import os
 import shutil
@@ -28,18 +29,55 @@ class SecretsTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             d = Path(tmp) / "secrets"
             self.assertEqual(ops.init_secrets(d), list(ops.SECRET_NAMES))
-            values = {(d / f"{n}.txt").read_text() for n in ops.SECRET_NAMES}
+
+            values = {
+                (d / f"{n}.txt").read_text()
+                for n in ops.SECRET_NAMES
+            }
             self.assertEqual(len(values), 3, "cada secreto debe ser distinto")
-            self.assertEqual(stat.S_IMODE(d.stat().st_mode), 0o700)
-            self.assertEqual(stat.S_IMODE((d / "db_password.txt").stat().st_mode), 0o644)
+
+            # Windows no interpreta los permisos POSIX de la misma manera.
+            # Por eso estas comprobaciones se ejecutan solamente en Linux/macOS.
+            if os.name == "posix":
+                self.assertEqual(
+                    stat.S_IMODE(d.stat().st_mode),
+                    0o750
+                )
+
+                for name in ops.SECRET_NAMES:
+                    archivo = d / f"{name}.txt"
+                    self.assertEqual(
+                        stat.S_IMODE(archivo.stat().st_mode),
+                        0o640
+                    )
+
+    def test_longitud_minima(self):
+        self.assertGreaterEqual(len(ops.generate_secret()), 32)
+
+    def test_no_sobrescribe_sin_force(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            d = Path(tmp) / "secrets"
+            ops.init_secrets(d)
+
+            original = (d / "db_password.txt").read_text()
+
+            self.assertEqual(ops.init_secrets(d), [])
+
+            self.assertEqual(
+                (d / "db_password.txt").read_text(),
+                original
+            )
 
     def test_no_sobrescribe_sin_force(self):
         with tempfile.TemporaryDirectory() as tmp:
             d = Path(tmp)
             ops.init_secrets(d)
+
             before = (d / "db_password.txt").read_text()
+
             self.assertEqual(ops.init_secrets(d), [])
             self.assertEqual((d / "db_password.txt").read_text(), before)
+
             self.assertEqual(len(ops.init_secrets(d, force=True)), 3)
             self.assertNotEqual((d / "db_password.txt").read_text(), before)
 
@@ -53,36 +91,82 @@ class CertsTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             d = Path(tmp)
             ops.generate_certs(d, "faro.test", days=30)
-            san = subprocess.run(["openssl", "x509", "-in", d / "fullchain.pem", "-noout", "-ext", "subjectAltName"],
-                                 capture_output=True, text=True, check=True).stdout
+
+            san = subprocess.run(
+                [
+                    "openssl",
+                    "x509",
+                    "-in",
+                    d / "fullchain.pem",
+                    "-noout",
+                    "-ext",
+                    "subjectAltName"
+                ],
+                capture_output=True,
+                text=True,
+                check=True
+            ).stdout
+
             self.assertIn("DNS:faro.test", san)
             self.assertIn("IP Address:127.0.0.1", san)
-            verify = subprocess.run(["openssl", "verify", "-CAfile", d / "ca.crt", d / "fullchain.pem"],
-                                    capture_output=True, text=True)
+
+            verify = subprocess.run(
+                [
+                    "openssl",
+                    "verify",
+                    "-CAfile",
+                    d / "ca.crt",
+                    d / "fullchain.pem"
+                ],
+                capture_output=True,
+                text=True
+            )
+
             self.assertEqual(verify.returncode, 0, verify.stderr)
-            self.assertEqual(stat.S_IMODE(d.stat().st_mode), 0o700)
+            self.assertEqual(stat.S_IMODE(d.stat().st_mode), 0o750)
 
 
 class BackupTest(unittest.TestCase):
     def test_conserva_solo_las_mas_recientes(self):
         with tempfile.TemporaryDirectory() as tmp:
             d = Path(tmp)
-            names = [f"faro-2026110{i}-100000.sql.gz" for i in range(1, 6)]
+            names = [
+                f"faro-2026110{i}-100000.sql.gz"
+                for i in range(1, 6)
+            ]
+
             for n in names:
                 (d / n).touch()
+
             removed = ops.prune_backups(d, keep=2)
+
             self.assertEqual([p.name for p in removed], names[:3])
-            self.assertEqual(sorted(p.name for p in d.iterdir()), names[3:])
+            self.assertEqual(
+                sorted(p.name for p in d.iterdir()),
+                names[3:]
+            )
 
 
 class MiscTest(unittest.TestCase):
     def test_compose_apunta_a_la_raiz(self):
-        self.assertEqual(ops.compose(Path("/x"))[:4], ["docker", "compose", "--project-directory", "/x"])
+        self.assertEqual(
+            ops.compose(Path("/x"))[:4],
+            ["docker", "compose", "--project-directory", str(Path("/x"))]
+        )
 
     def test_read_env_ignora_comentarios(self):
         with tempfile.TemporaryDirectory() as tmp:
-            (Path(tmp) / ".env").write_text("# nota\nDOMAIN=ejemplo.com\n\nHTTP_PORT = 8080\n")
-            self.assertEqual(ops.read_env(Path(tmp)), {"DOMAIN": "ejemplo.com", "HTTP_PORT": "8080"})
+            (Path(tmp) / ".env").write_text(
+                "# nota\nDOMAIN=ejemplo.com\n\nHTTP_PORT = 8080\n"
+            )
+
+            self.assertEqual(
+                ops.read_env(Path(tmp)),
+                {
+                    "DOMAIN": "ejemplo.com",
+                    "HTTP_PORT": "8080"
+                }
+            )
 
     def test_parser_rechaza_comando_desconocido(self):
         with self.assertRaises(SystemExit):
@@ -91,7 +175,12 @@ class MiscTest(unittest.TestCase):
 
 class CommitMessageTest(unittest.TestCase):
     def test_validos(self):
-        for s in ("feat(api): agrega ruta de señales", "fix: corrige el redireccionamiento", "docs: actualiza README", "ci: añade pipeline"):
+        for s in (
+            "feat(api): agrega ruta de señales",
+            "fix: corrige el redireccionamiento",
+            "docs: actualiza README",
+            "ci: añade pipeline"
+        ):
             self.assertEqual(commit.validate(s), [], s)
 
     def test_invalidos(self):
@@ -102,6 +191,7 @@ class CommitMessageTest(unittest.TestCase):
             "fix: termina en punto.": "punto",
             "feature: tipo inventado": "formato",
         }
+
         for subject, expected in casos.items():
             problems = " ".join(commit.validate(subject))
             self.assertIn(expected, problems, subject)
