@@ -1,0 +1,22 @@
+# Prometheus vive en la red `mgmt`: sin puertos publicados. Se consulta por VPN.
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+rule_files:
+  - /etc/prometheus/rules.yml
+
+scrape_configs:
+  - job_name: prometheus
+    static_configs:
+      - targets: ['localhost:9090']
+
+  - job_name: faro-api
+    metrics_path: /metrics
+    static_configs:
+      - targets: ['api:3000']
+
+  - job_name: faro-sentinel
+    metrics_path: /metrics
+    static_configs:
+      - targets: ['sentinel:9100']

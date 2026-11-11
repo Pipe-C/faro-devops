@@ -1,0 +1,40 @@
+# Reglas de alerta. Se evalúan en Prometheus y se ven en Grafana → Alerting o en
+# http://prometheus:9090/alerts (dentro de la VPN). Para recibir avisos por
+# correo o Slack habría que añadir Alertmanager; queda fuera del alcance del taller.
+groups:
+  - name: faro
+    rules:
+      - alert: ApiNoDisponible
+        expr: up{job="faro-api"} == 0
+        for: 1m
+        labels: { severity: critical }
+        annotations:
+          summary: Prometheus no puede leer las métricas de la API desde hace 1 minuto.
+
+      - alert: SondaDeApiFallando
+        expr: faro_probe_up{target="api"} == 0
+        for: 1m
+        labels: { severity: critical }
+        annotations:
+          summary: El sentinel no obtiene respuesta correcta de /health/ready (API o base de datos caídas).
+
+      - alert: CertificadoPorVencer
+        expr: faro_certificate_days_remaining < 14
+        for: 10m
+        labels: { severity: warning }
+        annotations:
+          summary: El certificado TLS vence en menos de 14 días. Ejecuta `make letsencrypt-renew`.
+
+      - alert: LatenciaP95Alta
+        expr: histogram_quantile(0.95, sum by (le) (rate(http_request_duration_seconds_bucket{route="/api/status"}[5m]))) > 0.5
+        for: 5m
+        labels: { severity: warning }
+        annotations:
+          summary: El p95 de /api/status supera 500 ms durante 5 minutos.
+
+      - alert: TasaDeErrores5xxAlta
+        expr: sum(rate(http_request_duration_seconds_count{status_code=~"5.."}[5m])) / sum(rate(http_request_duration_seconds_count[5m])) > 0.05
+        for: 5m
+        labels: { severity: warning }
+        annotations:
+          summary: Más del 5 % de las respuestas de la API son errores 5xx.
