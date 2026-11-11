@@ -1,0 +1,22 @@
+# Dependencias y artefactos de compilación
+node_modules/
+dist/
+.venv/
+__pycache__/
+.pytest_cache/
+*.pyc
+coverage/
+
+# Secretos y material criptográfico: nunca se versionan
+.env
+deploy/secrets/*
+deploy/certs/*
+deploy/wireguard/*
+!deploy/secrets/.gitkeep
+!deploy/certs/.gitkeep
+!deploy/wireguard/.gitkeep
+
+# Copias de seguridad generadas por `make backup`
+backups/
+
+.DS_Store
