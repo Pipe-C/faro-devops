@@ -42,31 +42,43 @@ volumes:
   letsencrypt:
   acme_webroot:
 
+
 services:
   # ---------------------------------------------------------------- capa de borde
   proxy:
     <<: *hardened
     image: nginxinc/nginx-unprivileged:stable-alpine
     cap_drop: [ALL]
+
+    # Permite a Nginx acceder al grupo propietario de los certificados.
+    group_add:
+      - "${CERTS_GID:-101}"
+
     ports:
       - '${HTTP_PORT:-80}:8080'
       - '${HTTPS_PORT:-443}:8443'
+
     environment:
       DOMAIN: ${DOMAIN:-faro.localhost}
       PUBLIC_URL: ${PUBLIC_URL:-https://faro.localhost}
+
     volumes:
       - ./deploy/proxy/default.conf.template:/etc/nginx/templates/default.conf.template:ro
       - ./deploy/certs:/etc/nginx/certs:ro
       - acme_webroot:/var/www/certbot:ro
+
     depends_on:
       web: { condition: service_healthy }
       api: { condition: service_healthy }
+
     networks: [edge, app]
+
     healthcheck:
       test: ['CMD', 'wget', '-q', '--spider', 'http://127.0.0.1:8080/healthz']
       interval: 15s
       timeout: 3s
       retries: 3
+
 
   # ------------------------------------------------------------ capa de presentación
   web:

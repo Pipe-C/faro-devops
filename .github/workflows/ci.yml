@@ -74,6 +74,9 @@ jobs:
           python3 ops/faro_ops.py init
           python3 ops/faro_ops.py certs
 
+          # Grupo propietario de los certificados para permitir el acceso de Nginx.
+          echo "CERTS_GID=$(id -g)" >> .env
+
       - name: Validar configuración Docker Compose
         run: docker compose config -q
 

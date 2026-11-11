@@ -66,18 +66,13 @@ def generate_secret(nbytes: int = 24) -> str:
     return secrets.token_urlsafe(nbytes)
 
 
-def write_private(path: Path, content: str) -> None:
-    """Escribe con permisos 0644 desde la creación (sin ventana con permisos laxos).
-
-    ¿Por qué 0644 y no 0600? Docker monta el archivo tal cual: los contenedores
-    corren como usuarios sin privilegios (uid 1000, 101, 472…) y no podrían leer
-    un archivo 0600 del anfitrión. La protección real es el DIRECTORIO (0700):
-    ningún otro usuario del anfitrión puede entrar a leer el archivo.
-    """
-    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o644)
+def write_private(path: Path, content: str, mode: int = 0o640) -> None:
+    """Escribe archivos de certificados con permisos restringidos."""
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, mode)
     with os.fdopen(fd, "w", encoding="utf-8") as fh:
         fh.write(content)
-    path.chmod(0o644)
+
+    path.chmod(mode)
 
 
 # ------------------------------------------------------------------------- init
@@ -132,11 +127,29 @@ def generate_certs(certs_dir: Path, domain: str, days: int = 365) -> None:
             capture_output=True)
 
         certs_dir.mkdir(parents=True, exist_ok=True)
-        certs_dir.chmod(0o700)  # ver write_private: el directorio protege, el archivo se deja legible
-        write_private(certs_dir / "ca.crt", (t / "ca.crt").read_text())
-        # fullchain: la hoja primero (la lee el sentinel), después la CA.
-        write_private(certs_dir / "fullchain.pem", (t / "leaf.crt").read_text() + (t / "ca.crt").read_text())
-        write_private(certs_dir / "privkey.pem", (t / "leaf.key").read_text())
+
+        # El grupo propietario podrá atravesar el directorio.
+        certs_dir.chmod(0o750)
+
+        write_private(
+            certs_dir / "ca.crt",
+            (t / "ca.crt").read_text(),
+            0o640
+        )
+
+        # Fullchain: primero el certificado del servidor y después la CA.
+        write_private(
+            certs_dir / "fullchain.pem",
+            (t / "leaf.crt").read_text() + (t / "ca.crt").read_text(),
+            0o640
+        )
+
+        # La clave privada solo será legible por el propietario y su grupo.
+        write_private(
+            certs_dir / "privkey.pem",
+            (t / "leaf.key").read_text(),
+            0o640
+        )
 
 
 def cmd_certs(args: argparse.Namespace) -> int:
