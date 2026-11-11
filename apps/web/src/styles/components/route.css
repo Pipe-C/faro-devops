@@ -1,0 +1,88 @@
+/*
+ * El recorrido de una petición: proxy → web → API → base de datos.
+ * Es la pieza memorable de la interfaz; el haz ámbar cruza el trayecto una
+ * vez al cargar y cada vez que se envía una señal. Es movimiento que
+ * responde a una acción, no un adorno permanente.
+ */
+.route {
+  @apply relative py-2;
+  container-type: inline-size; /* permite medir el trayecto con unidades cqw */
+}
+
+.route__list {
+  @apply grid grid-cols-1 gap-8 sm:grid-cols-4 sm:gap-0;
+}
+
+.route__stop {
+  @apply relative grid content-start gap-1 pb-1 pl-8 sm:pl-0 sm:pr-6 sm:pt-9;
+
+  /* Conector hacia la capa siguiente. */
+  &::before {
+    content: '';
+    @apply absolute bg-line;
+    inset: calc(1rem - 1px) 0 auto 1rem;
+    height: 2px;
+  }
+
+  &:last-child::before {
+    display: none;
+  }
+
+  @media (max-width: 39.999rem) {
+    &::before {
+      inset: 1.25rem auto -2rem calc(0.5rem - 1px);
+      width: 2px;
+      height: auto;
+    }
+  }
+}
+
+.route__node {
+  @apply absolute left-0 top-0 size-4 rounded-full border-2 border-line bg-surface sm:top-2;
+
+  .route__stop[data-state='ok'] & {
+    @apply border-ok bg-ok;
+  }
+
+  .route__stop[data-state='down'] & {
+    @apply border-fail bg-fail;
+  }
+}
+
+.route__name {
+  @apply text-lg font-bold leading-tight;
+}
+
+.route__role {
+  @apply max-w-[28ch] text-sm text-ink-soft;
+}
+
+.route__detail {
+  @apply mt-1 text-sm font-semibold;
+
+  .route__stop[data-state='ok'] & {
+    @apply text-ok;
+  }
+
+  .route__stop[data-state='down'] & {
+    @apply text-fail;
+  }
+}
+
+/* Haz de luz: viaja desde la primera capa hasta la última (75 % del ancho). */
+.route__beam {
+  @apply pointer-events-none absolute left-0 top-[calc(1.5rem-1.5px)] hidden h-[3px] w-24 rounded-full sm:block;
+  background: linear-gradient(90deg, transparent, var(--signal));
+  animation: route-beam 1.6s cubic-bezier(0.16, 1, 0.3, 1) 1 both;
+}
+
+@keyframes route-beam {
+  from {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(calc(75cqw - 1rem));
+  }
+}

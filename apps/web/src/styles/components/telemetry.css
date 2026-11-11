@@ -1,0 +1,50 @@
+.telemetry__body {
+  @apply mt-6 grid gap-8 lg:grid-cols-[minmax(0,6fr)_minmax(0,5fr)] lg:items-end lg:gap-20;
+}
+
+.sparkline {
+  @apply block h-20 w-full overflow-visible;
+}
+
+.sparkline__line {
+  @apply fill-none stroke-ink stroke-2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.sparkline__dot {
+  @apply fill-signal stroke-ink stroke-2;
+  vector-effect: non-scaling-stroke;
+}
+
+.telemetry__caption {
+  @apply mt-3 text-sm text-ink-soft;
+}
+
+.telemetry__facts {
+  @apply grid gap-4;
+}
+
+.telemetry__fact {
+  @apply flex items-baseline justify-between gap-6 border-b border-line pb-3;
+}
+
+.telemetry__label {
+  @apply text-ink-soft;
+}
+
+.telemetry__value {
+  @apply text-right text-lg font-bold;
+
+  &[data-tone='warn'] {
+    @apply text-fail;
+  }
+}
+
+.telemetry__empty {
+  @apply mt-6 max-w-[60ch] text-ink-soft;
+}
+
+.telemetry {
+  @apply min-w-0;
+}

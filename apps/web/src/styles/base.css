@@ -1,0 +1,48 @@
+html {
+  @apply bg-surface font-sans text-ink antialiased;
+}
+
+body {
+  @apply min-h-dvh text-base;
+  line-height: 1.55;
+  font-variant-numeric: tabular-nums;
+}
+
+h1,
+h2 {
+  text-wrap: balance;
+}
+
+p {
+  text-wrap: pretty;
+}
+
+::selection {
+  @apply bg-signal text-signal-ink;
+}
+
+:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 3px;
+}
+
+/* Oculto visualmente pero disponible para lectores de pantalla. */
+.visually-hidden {
+  @apply absolute -m-px size-px overflow-hidden whitespace-nowrap border-0 p-0;
+  clip-path: inset(50%);
+}
+
+/* Respeta la preferencia del sistema: sin animaciones y sin el haz de luz. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+
+  .route__beam {
+    display: none;
+  }
+}

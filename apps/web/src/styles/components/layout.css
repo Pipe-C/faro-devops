@@ -1,0 +1,52 @@
+.shell {
+  @apply mx-auto w-full max-w-6xl px-5 sm:px-8;
+}
+
+.masthead {
+  @apply flex items-center justify-between gap-4 py-6;
+}
+
+.brand {
+  @apply flex items-center gap-3 text-xl font-extrabold tracking-tight;
+}
+
+.brand__mark {
+  @apply size-9;
+}
+
+.brand__tower {
+  @apply fill-ink;
+}
+
+.brand__lamp {
+  @apply fill-signal;
+}
+
+.brand__beam {
+  @apply fill-none stroke-signal stroke-[1.6];
+  stroke-linecap: round;
+}
+
+.brand__tagline {
+  @apply hidden text-sm text-ink-soft sm:block;
+}
+
+.page {
+  @apply grid gap-16 pb-20 pt-6 sm:pt-12;
+}
+
+.workbench {
+  @apply grid gap-12 lg:grid-cols-[minmax(0,5fr)_minmax(0,6fr)] lg:gap-20;
+}
+
+.section-title {
+  @apply text-xl font-bold tracking-tight;
+}
+
+.section-lead {
+  @apply mt-2 max-w-[60ch] text-ink-soft;
+}
+
+.footer {
+  @apply border-t border-line py-8 text-sm text-ink-soft;
+}

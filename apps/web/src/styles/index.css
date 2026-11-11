@@ -1,0 +1,17 @@
+/*
+ * Punto de entrada de estilos. Tailwind v4 resuelve los @import antes de
+ * procesar @apply, por eso cada componente puede vivir en su propio archivo.
+ *
+ * Regla del proyecto: los componentes .tsx solo usan nombres semánticos
+ * (route__stop, button…). Todo utilitario de Tailwind vive en estos CSS.
+ * `npm run lint:design` lo verifica.
+ */
+@import 'tailwindcss';
+@import './tokens.css';
+@import './base.css';
+@import './components/layout.css';
+@import './components/hero.css';
+@import './components/route.css';
+@import './components/controls.css';
+@import './components/signals.css';
+@import './components/telemetry.css';

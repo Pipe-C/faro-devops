@@ -1,0 +1,49 @@
+.signal__form {
+  @apply mt-6;
+}
+
+.signal__footer {
+  @apply mt-3 flex items-center justify-between gap-4;
+}
+
+.signal__count {
+  @apply text-sm text-ink-soft;
+}
+
+.signal__feedback {
+  @apply mt-3 min-h-6 text-sm font-semibold;
+
+  &[data-phase='sent'] {
+    @apply text-ok;
+  }
+
+  &[data-phase='error'] {
+    @apply text-fail;
+  }
+}
+
+.log__list {
+  @apply mt-6 divide-y divide-line border-y border-line;
+}
+
+.log__item {
+  @apply grid gap-1 py-4 sm:grid-cols-[9.5rem_1fr] sm:gap-6;
+}
+
+.log__time {
+  @apply text-sm text-ink-soft;
+}
+
+.log__message {
+  @apply break-words;
+}
+
+.log__empty {
+  @apply mt-6 max-w-[60ch] text-ink-soft;
+}
+
+/* Contenedores de sección: `min-w-0` evita que un mensaje largo ensanche la rejilla. */
+.signal,
+.log {
+  @apply min-w-0;
+}

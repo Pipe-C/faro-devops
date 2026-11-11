@@ -1,0 +1,13 @@
+.hero__title {
+  @apply max-w-[16ch] text-display text-ink;
+}
+
+/* El color refuerza el estado, pero el texto del titular ya lo dice por sí solo. */
+.hero[data-phase='degraded'] .hero__title,
+.hero[data-phase='unreachable'] .hero__title {
+  @apply text-fail;
+}
+
+.hero__text {
+  @apply mt-6 max-w-[60ch] text-lg text-ink-soft;
+}

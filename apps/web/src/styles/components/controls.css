@@ -1,0 +1,16 @@
+.field__label {
+  @apply mb-2 block text-sm font-semibold;
+}
+
+.field__control {
+  @apply block w-full resize-y rounded-md border border-line bg-surface px-3.5 py-3 text-base text-ink transition-colors duration-150;
+
+  &:hover {
+    @apply border-ink-soft;
+  }
+}
+
+/* Acción principal: el ámbar de la lámpara. */
+.button {
+  @apply inline-flex min-h-11 items-center justify-center rounded-md bg-signal px-5 font-semibold text-signal-ink transition duration-150 hover:brightness-95 active:brightness-90 disabled:cursor-wait disabled:opacity-60;
+}

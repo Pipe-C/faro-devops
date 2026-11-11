@@ -1,0 +1,56 @@
+/*
+ * Tokens de diseño. Dirección: carta náutica de noche vista de día.
+ * Niebla fría de fondo, tinta azul marino para el texto y UN solo acento,
+ * el ámbar de la lámpara del faro. Se reserva para el haz de luz, la acción
+ * principal y la selección: no se usa como decoración.
+ * Colores en OKLCH: luminosidad perceptual predecible para el contraste.
+ */
+:root {
+  color-scheme: light dark;
+  --surface: oklch(97.5% 0.007 225);
+  --surface-sunk: oklch(94% 0.013 228);
+  --ink: oklch(23% 0.045 245);
+  --ink-soft: oklch(44% 0.035 245); /* 5,2:1 sobre --surface */
+  --line: oklch(84% 0.02 235);
+  --signal: oklch(82% 0.165 82);
+  --signal-ink: oklch(25% 0.05 70);
+  --ok: oklch(45% 0.115 172);
+  --fail: oklch(47% 0.19 28);
+  --focus: oklch(52% 0.17 250);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --surface: oklch(21% 0.04 248);
+    --surface-sunk: oklch(26% 0.045 248);
+    --ink: oklch(95% 0.01 230);
+    --ink-soft: oklch(77% 0.025 235);
+    --line: oklch(36% 0.04 245);
+    --ok: oklch(78% 0.14 170);
+    --fail: oklch(74% 0.16 28);
+    --focus: oklch(78% 0.12 250);
+  }
+}
+
+/* `inline` hace que las utilidades lean la variable en tiempo de ejecución (necesario para el modo oscuro). */
+@theme inline {
+  --color-surface: var(--surface);
+  --color-sunk: var(--surface-sunk);
+  --color-ink: var(--ink);
+  --color-ink-soft: var(--ink-soft);
+  --color-line: var(--line);
+  --color-signal: var(--signal);
+  --color-signal-ink: var(--signal-ink);
+  --color-ok: var(--ok);
+  --color-fail: var(--fail);
+}
+
+@theme {
+  --font-sans: 'Schibsted Grotesk Variable', ui-sans-serif, system-ui, sans-serif;
+
+  /* Escala tipográfica: el titular de estado es el único tamaño "grande". */
+  --text-display: clamp(2.5rem, 1.4rem + 4.6vw, 4.75rem);
+  --text-display--line-height: 1.02;
+  --text-display--letter-spacing: -0.035em;
+  --text-display--font-weight: 800;
+}
