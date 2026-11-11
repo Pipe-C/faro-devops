@@ -1,5 +1,7 @@
 # Faro · Observatorio del despliegue
 
+[![CI](https://github.com/Pipe-C/faro-devops/actions/workflows/ci.yml/badge.svg)](https://github.com/Pipe-C/faro-devops/actions/workflows/ci.yml)
+
 Entorno DevOps completo y pequeño: una interfaz que muestra, en tiempo real, el recorrido de una
 petición a través de **proxy → web → API → base de datos**, y deja enviar una "señal" que se guarda
 en MySQL. Es la evolución del laboratorio *Arquitectura multicontenedor con Docker Compose* del
@@ -35,34 +37,124 @@ Tres redes de Docker, dos de ellas `internal: true` (sin salida a Internet ni pu
 - `app`: proxy ↔ web ↔ api ↔ db. La base de datos solo existe aquí.
 - `mgmt`: Prometheus, Grafana, sentinel y WireGuard. Se administra únicamente por la VPN.
 
-## Inicio rápido
+## Replicar el proyecto paso a paso
 
-Requisitos: Docker con Compose v2, Python 3 y OpenSSL (en Ubuntu: `sudo apt install docker.io docker-compose-v2 python3 openssl make`).
+### 1. Requisitos
+
+| Sistema | Qué instalar |
+|---|---|
+| **Ubuntu / Debian** | `sudo apt install docker.io docker-compose-v2 python3 openssl make git` y luego `sudo usermod -aG docker $USER` (cierra sesión y vuelve a entrar). |
+| **Windows** | Docker Desktop con integración **WSL2** y una distro Ubuntu. Ejecuta todo **dentro de Ubuntu (WSL)** y clona el repositorio en `~/` (no en `/mnt/c/...`): fuera del sistema de archivos de Linux los permisos de secretos y certificados no se respetan. |
+| **macOS** | Docker Desktop, Python 3, OpenSSL y make. Sin VPN: ver [solución de problemas](#solución-de-problemas). |
+
+Comprueba las versiones: `docker compose version` debe responder (Compose v2) y `make --version` también.
+
+### 2. Clonar e inicializar
 
 ```bash
-make doctor     # revisa requisitos y puertos
-make up         # genera secretos y certificado, construye y levanta todo
-make smoke      # 8 pruebas de extremo a extremo
+git clone https://github.com/Pipe-C/faro-devops.git
+cd faro-devops
+make init       # crea los secretos aleatorios y el archivo .env
 ```
 
-Abre `https://faro.localhost`. El navegador avisará del certificado porque lo firma una CA local:
-importa `deploy/certs/ca.crt` o, con curl, usa `--cacert deploy/certs/ca.crt`.
-Si los puertos 80/443 están ocupados, cambia `HTTP_PORT`, `HTTPS_PORT` y `PUBLIC_URL` en `.env`
-(por ejemplo 8080, 8443 y `https://faro.localhost:8443`).
+`make init` genera tres contraseñas en `deploy/secrets/` y crea `.env` a partir de `.env.example`.
+Si necesitas cambiar algo (puertos ocupados, dominio, clientes VPN), **este es el momento**: edita `.env`
+antes del siguiente paso. Variables más habituales:
 
-`make help` lista todos los comandos. Los más usados: `make logs S=api`, `make ps`, `make down`.
+| Variable | Por defecto | Cuándo cambiarla |
+|---|---|---|
+| `HTTP_PORT` / `HTTPS_PORT` | `80` / `443` | Si están ocupados: usa `8080` / `8443` |
+| `PUBLIC_URL` | `https://faro.localhost` | Si cambias el puerto: `https://faro.localhost:8443` |
+| `WG_SERVERURL` | `auto` | IP o dominio por el que los clientes alcanzan el servidor VPN (ver [VPN](#acceso-por-vpn-wireguard)) |
+| `WG_PEERS` | `laptop,celular` | Nombres de los clientes VPN que se crean |
+
+### 3. Verificar requisitos
+
+```bash
+make doctor
+```
+
+Debe mostrar `✓` en todo. Un `!` en un puerto es un aviso (ocupado); un `✗` hay que corregirlo:
+
+```
+ ✓ Docker instalado
+ ✓ Docker Compose v2 disponible
+ ✓ OpenSSL instalado
+ ✓ Archivo .env presente
+ ✓ Secretos generados
+ ✗ Certificado TLS presente   Ejecuta `make certs`      <- normal antes del paso 4
+```
+
+### 4. Levantar todo
+
+```bash
+make up
+```
+
+Genera el certificado TLS si falta, construye las tres imágenes y arranca los contenedores. La primera vez
+tarda varios minutos (descarga de imágenes). Termina cuando todos los servicios con *healthcheck* están
+`healthy`. Compruébalo con `make ps`.
+
+### 5. Probar
+
+```bash
+make smoke
+```
+
+Ocho comprobaciones de extremo a extremo (redirección HTTP→HTTPS, TLS verificado, cabeceras de seguridad,
+API, escritura y lectura en MySQL, `/metrics` oculto). El resultado esperado es:
+
+```
+ ✓ HTTP redirige a HTTPS (301)
+ ✓ HTTPS responde con certificado verificado
+ ✓ Cabeceras de seguridad presentes (HSTS, CSP, nosniff)
+ ✓ /api/status responde y la base de datos está operativa
+ ✓ POST /api/signals guarda una señal (201)
+ ✓ La señal aparece en GET /api/signals
+ ✓ Mensaje inválido se rechaza (400)
+ ✓ /metrics NO está expuesto al exterior (404)
+
+8/8 comprobaciones correctas
+```
+
+Después abre **https://faro.localhost** (o la URL de `PUBLIC_URL`). El navegador avisará del certificado
+porque lo firma una CA local: acepta la excepción o importa `deploy/certs/ca.crt` como autoridad raíz.
+Si `faro.localhost` no resolviera en tu equipo, añade `127.0.0.1 faro.localhost` a `/etc/hosts`.
+
+Qué deberías ver: un titular de estado («Todo el recorrido responde.»), las cuatro capas en verde, el
+formulario para enviar una señal y la bitácora con el mensaje de bienvenida. Envía una señal, ejecuta
+`make down && make up` y comprueba que sigue en la bitácora: está guardada en el volumen de MySQL.
+
+### 6. Apagar
+
+```bash
+make down       # detiene los contenedores y conserva los datos
+make clean      # ¡destructivo! borra también los volúmenes (base de datos incluida)
+```
+
+`make help` lista todos los comandos. Los más usados: `make logs S=api`, `make ps`, `make restart S=proxy`.
 
 ## Acceso por VPN (WireGuard)
 
-Grafana y Prometheus no tienen puertos publicados. Para entrar:
+Grafana y Prometheus no tienen puertos publicados. Solo se entra por el túnel.
 
-1. En `.env` pon `WG_SERVERURL` con la IP o dominio público del servidor (o deja `auto`) y los clientes en `WG_PEERS`.
-2. `make up` y luego `make vpn PEER=laptop` imprime la configuración del cliente (o `make vpn-qr PEER=celular` para escanearla con la app de WireGuard).
-3. Con el túnel activo abre `http://grafana:3000` (usuario `admin`, contraseña en `deploy/secrets/grafana_admin_password.txt`) y `http://prometheus:9090`.
+1. **Antes del primer `make up`**, en `.env` pon `WG_SERVERURL` con la dirección por la que tu cliente
+   alcanzará el servidor: la IP pública o el dominio en un servidor real, o la IP de tu red local
+   (p. ej. `192.168.1.20`) si pruebas desde otro dispositivo de tu casa. Las configuraciones de los
+   clientes se generan una sola vez; si cambias `WG_SERVERURL` o `WG_PEERS` después, ejecuta
+   `docker compose down`, borra el contenido de `deploy/wireguard/` y vuelve a hacer `make up`.
+2. Con el entorno levantado: `make vpn PEER=laptop` imprime la configuración del cliente
+   (o `make vpn-qr PEER=celular` muestra un QR para la app de WireGuard del móvil).
+3. En el cliente: guarda esa configuración como `/etc/wireguard/faro.conf` y activa el túnel con
+   `sudo wg-quick up faro` (Linux; requiere `sudo apt install wireguard`), o impórtala en la app de WireGuard.
+4. Con el túnel activo abre `http://grafana:3000` (usuario `admin`, contraseña en
+   `deploy/secrets/grafana_admin_password.txt`) y `http://prometheus:9090`.
+5. `make vpn-status` muestra qué clientes están conectados.
 
 Los nombres se resuelven porque `PEERDNS=auto` reenvía al DNS interno de Docker. El túnel es *dividido*:
 solo viaja por él el tráfico hacia `10.13.13.0/24` y `172.28.0.0/24`; el resto de tu Internet no cambia.
-`make vpn-status` muestra los clientes conectados.
+Conviene probar la VPN desde **otro dispositivo**: usar como cliente la misma máquina que hospeda los
+contenedores complica el enrutamiento.
 
 ## Monitoreo
 
@@ -77,8 +169,8 @@ No se incluye Alertmanager: las alertas se ven en Prometheus/Grafana, pero no se
 
 | Comando | Qué hace |
 |---|---|
-| `make init` | Secretos aleatorios (`secrets.token_urlsafe`) y `.env`. Idempotente. |
-| `make certs` | CA local + certificado ECDSA P-256 con SAN (`faro.localhost`, `localhost`, `127.0.0.1`). |
+| `make init` | Secretos aleatorios (`secrets.token_urlsafe`), `.env` y el grupo propietario de `deploy/secrets` (`SECRETS_GID`). Idempotente. |
+| `make certs` | CA local + certificado ECDSA P-256 con SAN (`faro.localhost`, `localhost`, `127.0.0.1`) y el grupo propietario de `deploy/certs` (`CERTS_GID`). |
 | `make doctor` | Docker, Compose, OpenSSL, secretos, vigencia del certificado y puertos libres. |
 | `make smoke` | HTTP→HTTPS, TLS verificado, cabeceras, API, escritura y lectura en MySQL, `/metrics` oculto. |
 | `make backup` / `make restore FILE=…` | `mysqldump` comprimido en streaming, con retención de 7 copias. |
@@ -92,7 +184,39 @@ No se incluye Alertmanager: las alertas se ven en Prometheus/Grafana, pero no se
 - **Nginx**: TLS 1.2/1.3 con suites modernas, HSTS, CSP estricta, `X-Frame-Options`, `nosniff`, `Referrer-Policy`; límite de 10 req/s por IP; rechaza peticiones con `Host` desconocido; `X-Forwarded-For` se sobrescribe (no se puede falsificar); `/metrics` y `/health` no se enrutan.
 - **API**: validación con Zod, consultas preparadas (sin SQL concatenado), Helmet, *rate limit* global y más estricto en escritura, errores 5xx sin detalles internos, cuerpo máximo de 4 KiB.
 - **Cliente**: React escapa el texto de las señales; la CSP bloquea scripts y estilos en línea.
-- **Permisos de secretos y claves**: archivos `0644` dentro de directorios `0700`. Es deliberado: Docker monta el archivo con los permisos del anfitrión y los contenedores corren sin privilegios, así que `0600` los dejaría sin lectura (ver `write_private` en `ops/faro_ops.py`).
+
+### Permisos de secretos y certificados (lección del CI)
+
+Los contenedores corren con usuarios sin privilegios (Nginx uid 101, API uid 1000, MySQL 999, Grafana 472…)
+que **no son el dueño** de los archivos del anfitrión. Un directorio `0700` o un archivo `0600` los dejaría
+sin acceso, porque al montar una carpeta (`./deploy/certs`) el contenedor necesita poder atravesarla. Abrir
+todo a «otros» (`0644`) expondría las claves a cualquier usuario del equipo. La solución es el **grupo**:
+
+- Directorios `0750` y archivos `0640`: dueño y grupo leen, el resto no.
+- `make init` y `make certs` anotan en `.env` el GID del grupo propietario (`SECRETS_GID`, `CERTS_GID`).
+- Compose los pasa a `group_add` de cada servicio que necesita leerlos, de modo que el usuario sin
+  privilegios del contenedor pertenece a ese grupo.
+
+El GID depende de cada máquina (típicamente 1000 en un portátil y 1001 en GitHub Actions), por eso se
+calcula en lugar de fijarse. Si ves `Permission denied` al cargar el certificado, revisa
+[solución de problemas](#solución-de-problemas).
+
+## Integración continua
+
+`.github/workflows/ci.yml` ejecuta en cada *push* y *pull request*:
+
+| Job | Qué valida |
+|---|---|
+| `api` | Tipos, pruebas y compilación de TypeScript |
+| `web` | Tipos, separación diseño/código, pruebas, *build* y detector de Impeccable |
+| `sentinel` | Pruebas de Python (pytest) |
+| `ops` | Pruebas de la CLI y formato de **todos** los mensajes de commit |
+| `compose` | Genera secretos y certificados, valida el Compose, construye las imágenes, levanta el entorno y ejecuta `make smoke` |
+
+El job `compose` usa puertos altos (8080/8443) porque los *runners* no enlazan 80/443, y si algo falla
+imprime un diagnóstico completo: estado de los contenedores, logs de proxy, API, MySQL, Grafana y
+sentinel, salud de proxy y API, la configuración efectiva de Nginx (`nginx -T`) y los permisos de
+secretos y certificados. Es lo primero que conviene mirar en una ejecución roja.
 
 ## Estructura
 
@@ -120,19 +244,22 @@ componente tiene su CSS con nombres semánticos (`route__stop`, `button`) constr
 Los `.tsx` no contienen ni una utilidad. `npm run lint:design` lo hace cumplir y falla si aparece
 una clase que no esté definida o un `className` dinámico.
 
-## Pruebas y calidad
+## Desarrollo y pruebas
+
+Sin Docker, para trabajar en el código (requiere Node 22+ y Python 3.12):
 
 ```bash
-make setup && make test
+make setup      # instala las dependencias de la API, la web y el sentinel
+make test       # tipos + pruebas de las tres aplicaciones y de ops
+make lint       # separación diseño/código y formato de commits
 ```
-
-API 20 pruebas (Vitest, repositorio en memoria), sentinel 12 (pytest), web 11 + verificación de clases, ops 10 (`unittest`).
-CI (`.github/workflows/ci.yml`) además construye las imágenes y ejecuta `make smoke` contra el entorno levantado.
 
 ## Convención de commits
 
 Conventional Commits en español, **máximo 50 caracteres** en el asunto: `feat(api): agrega ruta de señales`.
-`make hooks` activa un hook que lo valida; `make lint` revisa el historial.
+Tipos válidos: `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `build`, `ci`, `chore`, `revert`;
+la descripción empieza en minúscula y no termina en punto. `make hooks` activa un hook local que lo valida
+antes de cada commit; el job `ops` del CI lo revisa en todo el historial.
 
 ## Diferencias frente a la guía original del laboratorio
 
@@ -148,11 +275,17 @@ Conventional Commits en español, **máximo 50 caracteres** en el asunto: `feat(
 
 ## Solución de problemas
 
-- **`address already in use`**: cambia `HTTP_PORT`/`HTTPS_PORT` en `.env` (ver arriba) o libera 80/443.
-- **WireGuard no arranca en Docker Desktop (Mac/Windows)**: necesita un kernel Linux con el módulo `wireguard`. Funciona en Ubuntu/WSL2 recientes; para pruebas sin VPN: `docker compose up -d --scale wireguard=0`.
-- **El navegador desconfía del certificado**: importa `deploy/certs/ca.crt` como autoridad raíz.
-- **Cambié las contraseñas con `make init ARGS=--force` y MySQL rechaza la conexión**: la base conserva la contraseña antigua en su volumen; `make clean` (borra los datos) y `make up`.
-- **La telemetría dice «el sentinel no está reportando»**: `make logs S=sentinel`.
+| Síntoma | Causa y solución |
+|---|---|
+| `address already in use` | Puerto ocupado. Cambia `HTTP_PORT`/`HTTPS_PORT`/`PUBLIC_URL` en `.env` y repite `make up`. |
+| `permission denied` al cargar `fullchain.pem`/`privkey.pem`, o el proxy queda `unhealthy` | Falta el GID del grupo propietario en `.env`. Comprueba `grep GID .env` y `ls -ln deploy/certs`: el número de grupo de los archivos debe coincidir con `CERTS_GID`. Para regenerar: `make certs ARGS=--force` y `make up`. |
+| `permission denied` leyendo una contraseña (API, MySQL o Grafana en bucle de reinicio) | Igual con `SECRETS_GID`: `grep GID .env` y `ls -ln deploy/secrets`; ejecuta `make init` para que lo registre. |
+| El navegador desconfía del certificado | Es normal con una CA local. Acepta la excepción o importa `deploy/certs/ca.crt` como autoridad raíz. |
+| `faro.localhost` no resuelve | Añade `127.0.0.1 faro.localhost` a `/etc/hosts` (en Windows, también al archivo `hosts` de Windows). |
+| WireGuard no arranca (Docker Desktop en Mac/Windows) | Necesita un kernel Linux con el módulo `wireguard`. Funciona en Ubuntu y WSL2 recientes. Sin VPN: `docker compose up -d --build --scale wireguard=0`. |
+| Cambié las contraseñas con `make init ARGS=--force` y MySQL rechaza la conexión | La base conserva la contraseña antigua en su volumen: `make clean` (borra los datos) y `make up`. |
+| La telemetría dice «el sentinel no está reportando» | `make logs S=sentinel`. |
+| Cualquier otro fallo | `make ps` y `make logs S=<servicio>` (`proxy`, `api`, `db`, `sentinel`, `prometheus`, `grafana`). |
 
 ## Alcance y límites conocidos
 
